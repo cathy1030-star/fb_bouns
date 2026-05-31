@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>得獎資料統計系統</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
+        textarea { width: 100%; height: 100px; padding: 8px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; resize: vertical; }
+        button { padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #218838; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>得獎資料統計</h2>
+        <div class="input-group">
+            <label>得獎暱稱 (a):</label>
+            <input type="text" id="nickname" placeholder="請輸入得獎暱稱">
+        </div>
+        <div class="input-group">
+            <label>accid (b):</label>
+            <input type="text" id="accid" placeholder="請輸入 accid">
+        </div>
+        <div class="input-group">
+            <label>遊戲暱稱 (c):</label>
+            <input type="text" id="gamename" placeholder="請輸入遊戲暱稱">
+        </div>
+        <button onclick="submitData()">單筆提交</button>
+
+        <hr>
+
+        <div class="input-group">
+            <label>批量輸入 (格式: 得獎暱稱 accid 遊戲暱稱，每行一筆):</label>
+            <textarea id="bulkInput" placeholder="範例：&#10;小明 12345 戰神小明&#10;小華 67890 快樂小華"></textarea>
+        </div>
+        <button onclick="submitBulkData()" style="background-color: #007bff;">批量提交</button>
+
+        <hr>
+
+        <h3>統計結果</h3>
+        <table id="statsTable">
+            <thead>
+                <tr>
+                    <th>得獎暱稱 (a)</th>
+                    <th>accid (b)</th>
+                    <th>遊戲暱稱 (c)</th>
+                    <th>中獎次數</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 資料會顯示在這裡 -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function loadStats() {
+            const response = await fetch('/api/stats');
+            const data = await response.json();
+            const tbody = document.querySelector('#statsTable tbody');
+            tbody.innerHTML = '';
+
+            if (data) {
+                data.forEach(item => {
+                    const row = `<tr>
+                        <td>${item.a}</td>
+                        <td>${item.b}</td>
+                        <td>${item.c}</td>
+                        <td><strong>${item.count}</strong></td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            }
+        }
+
+        async function submitData() {
+            const a = document.getElementById('nickname').value;
+            const b = document.getElementById('accid').value;
+            const c = document.getElementById('gamename').value;
+
+            if (!a || !b || !c) {
+                alert('請填寫所有欄位');
+                return;
+            }
+
+            const response = await fetch('/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ a, b, c })
+            });
+
+            if (response.ok) {
+                document.getElementById('nickname').value = '';
+                document.getElementById('accid').value = '';
+                document.getElementById('gamename').value = '';
+                loadStats();
+            } else {
+                alert('提交失敗');
+            }
+        }
+
+        async function submitBulkData() {
+            const text = document.getElementById('bulkInput').value.trim();
+            if (!text) {
+                alert('請輸入資料');
+                return;
+            }
+
+            const lines = text.split('\n');
+            const records = lines.map(line => {
+                const parts = line.trim().split(/\s+/); // 支援空格或 Tab 分隔
+                if (parts.length >= 3) {
+                    return { a: parts[0], b: parts[1], c: parts[2] };
+                }
+                return null;
+            }).filter(r => r !== null);
+
+            if (records.length === 0) {
+                alert('格式不正確，請確保每行包含：得獎暱稱 accid 遊戲暱稱');
+                return;
+            }
+
+            const response = await fetch('/api/bulk-add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(records)
+            });
+
+            if (response.ok) {
+                document.getElementById('bulkInput').value = '';
+                loadStats();
+            }
+        }
+
+        // 初始載入
+        loadStats();
+    </script>
+</body>
+</html>
