@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -75,18 +76,24 @@ func loadData() {
 		return // 若檔案不存在則跳過
 	}
 
+	// 移除 Windows 常見的 UTF-8 BOM 標記，避免解析失敗
+	b = bytes.TrimPrefix(b, []byte("\xef\xbb\xbf"))
+
 	var data struct {
 		Stats    []StatsResult     `json:"stats"`
 		Registry map[string]string `json:"registry"`
 	}
 	if err := json.Unmarshal(b, &data); err != nil {
+		fmt.Println("解析 data.json 失敗:", err)
 		return
 	}
 
+	// 重建記憶體中的資料
 	for _, s := range data.Stats {
 		stats[s.Record] = s.Count
 	}
 	registry = data.Registry
+	fmt.Printf("成功載入資料庫：共 %d 筆統計紀錄，%d 筆暱稱關聯\n", len(stats), len(registry))
 }
 
 // 顯示首頁
@@ -197,7 +204,7 @@ func handleGetStats(w http.ResponseWriter, r *http.Request) {
 	statsMu.RLock()
 	defer statsMu.RUnlock()
 
-	var results []StatsResult
+	results := []StatsResult{} // 初始化為空陣列而非 nil，確保回傳 [] 而非 null
 	for rec, count := range stats {
 		results = append(results, StatsResult{
 			Record: rec,

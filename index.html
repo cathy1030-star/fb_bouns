@@ -118,10 +118,12 @@
         async function loadStats() {
             const response = await fetch('/api/stats');
             const data = await response.json();
+            console.log("目前的統計資料:", data);
+            
             const tbody = document.querySelector('#statsTable tbody');
             tbody.innerHTML = '';
 
-            if (data) {
+            if (data && data.length > 0) {
                 data.forEach(item => {
                     const row = `<tr>
                         <td>${item.a}</td>
