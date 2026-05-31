@@ -108,28 +108,40 @@ func handleBulkAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var addedCount int
 	registryMu.Lock()
 	statsMu.Lock()
-	for _, rec := range recs {
+	for i := range recs {
+		rec := &recs[i] // 使用指標直接修改原物件
 		if rec.AccID != "" && rec.GameName != "" {
 			regKey := rec.AccID + "_" + rec.GameName
 			if rec.Nickname != "" {
+				// 優先使用輸入的暱稱並更新資料庫
 				registry[regKey] = rec.Nickname
-			} else {
+			}
+
+			// 如果沒輸入暱稱，嘗試從資料庫補齊
+			if rec.Nickname == "" {
 				if name, ok := registry[regKey]; ok {
 					rec.Nickname = name
 				}
 			}
 
+			// 只有在暱稱存在的情況下才記錄統計
 			if rec.Nickname != "" {
-				stats[rec]++
+				stats[Record{Nickname: rec.Nickname, AccID: rec.AccID, GameName: rec.GameName}]++
+				addedCount++
 			}
 		}
 	}
 	statsMu.Unlock()
 	registryMu.Unlock()
 
-	w.WriteHeader(http.StatusOK)
+	if addedCount == 0 && len(recs) > 0 {
+		http.Error(w, "所有項目皆因缺少暱稱且資料庫無紀錄而跳過", http.StatusBadRequest)
+		return
+	}
+	fmt.Fprintf(w, "成功記錄 %d 筆資料", addedCount)
 }
 
 // 取得目前的統計清單
