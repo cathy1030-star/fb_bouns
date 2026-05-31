@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"sync"
 )
@@ -17,11 +18,18 @@ type Winner struct {
 	Count    int
 }
 
+// RecordKey 作為 map 的鍵值，確保三個資料都相同才算同一次得獎
+type RecordKey struct {
+	Name     string
+	AccID    string
+	GameName string
+}
+
 var (
 	// mu 確保並發情況下對 map 進行讀寫是安全的
 	mu sync.Mutex
-	// records 儲存得獎暱稱對應的詳細資料與次數
-	records = make(map[string]*Winner)
+	// records 儲存組合鍵對應的詳細資料與次數
+	records = make(map[RecordKey]*Winner)
 )
 
 // htmlTemplate 是網頁的畫面模板，包含輸入表單與排行榜
@@ -49,16 +57,16 @@ const htmlTemplate = `
 		<h2>📝 新增得獎資料</h2>
 		<form method="POST" action="/">
 			<div class="form-group">
-				<label>a: 得獎暱稱</label>
+				<label>a:得獎暱稱</label>
 				<input type="text" name="nickname" required placeholder="必填">
 			</div>
 			<div class="form-group">
-				<label>b: accid</label>
-				<input type="text" name="accid">
+				<label>b:accid</label>
+				<input type="text" name="accid" required placeholder="必填">
 			</div>
 			<div class="form-group">
-				<label>c: 遊戲暱稱</label>
-				<input type="text" name="gamename">
+				<label>c:遊戲暱稱</label>
+				<input type="text" name="gamename" required placeholder="必填">
 			</div>
 			<button type="submit">送出新增</button>
 		</form>
@@ -100,19 +108,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 		// 只要有輸入得獎暱稱，就進行紀錄與統計
 		if nickname != "" {
-			// 檢查是否已經有這位得獎者
-			if w, exists := records[nickname]; exists {
+			key := RecordKey{Name: nickname, AccID: accid, GameName: gamename}
+			// 檢查是否已經有這組得獎資料
+			if w, exists := records[key]; exists {
 				w.Count++
-				// 若後續輸入有提供新的 accid 或遊戲暱稱，則更新它
-				if accid != "" {
-					w.AccID = accid
-				}
-				if gamename != "" {
-					w.GameName = gamename
-				}
 			} else {
-				// 新增一位得獎者資料
-				records[nickname] = &Winner{
+				// 新增一筆得獎資料
+				records[key] = &Winner{
 					Name:     nickname,
 					AccID:    accid,
 					GameName: gamename,
@@ -145,10 +147,16 @@ func main() {
 	// 設定網頁的路由與處理函式
 	http.HandleFunc("/", handler)
 
-	fmt.Println("伺服器已啟動！請開啟瀏覽器並前往: http://localhost:8080")
+	// 為了能在雲端平台(如 Render)運行，需要抓取系統動態分配的 PORT
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // 如果是本地端自己測試，預設使用 8080
+	}
 
-	// 啟動伺服器在 8080 port
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	fmt.Printf("伺服器已啟動！請開啟瀏覽器並前往: http://localhost:%s\n", port)
+
+	// 啟動伺服器
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal("伺服器啟動失敗:", err)
 	}
 }
