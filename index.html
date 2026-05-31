@@ -16,52 +16,105 @@
         th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
         th { background-color: #f8f9fa; }
         tr:nth-child(even) { background-color: #f2f2f2; }
+        .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; border: 1px solid transparent; margin-bottom: -2px; }
+        .tab.active { border: 1px solid #ddd; border-bottom: 2px solid white; font-weight: bold; background-color: white; }
+        .content { display: none; }
+        .content.active { display: block; }
+        .hint { font-size: 0.85em; color: #666; margin-top: 4px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>得獎資料統計</h2>
-        <div class="input-group">
-            <label>得獎暱稱 (a):</label>
-            <input type="text" id="nickname" placeholder="請輸入得獎暱稱">
-        </div>
-        <div class="input-group">
-            <label>accid (b):</label>
-            <input type="text" id="accid" placeholder="請輸入 accid">
-        </div>
-        <div class="input-group">
-            <label>遊戲暱稱 (c):</label>
-            <input type="text" id="gamename" placeholder="請輸入遊戲暱稱">
-        </div>
-        <button onclick="submitData()">單筆提交</button>
 
-        <hr>
-
-        <div class="input-group">
-            <label>批量輸入 (格式: 得獎暱稱 accid 遊戲暱稱，每行一筆):</label>
-            <textarea id="bulkInput" placeholder="範例：&#10;小明 12345 戰神小明&#10;小華 67890 快樂小華"></textarea>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('statsPage')">得獎統計</div>
+            <div class="tab" onclick="switchTab('registryPage')">暱稱資料庫</div>
+            <div class="tab" onclick="switchTab('lookupPage')">暱稱批量查詢</div>
         </div>
-        <button onclick="submitBulkData()" style="background-color: #007bff;">批量提交</button>
 
-        <hr>
+        <div id="statsPage" class="content active">
+            <div class="input-group">
+                <label>得獎暱稱 (a):</label>
+                <input type="text" id="nickname" placeholder="如果是已知用戶，此處可留空">
+                <div class="hint">* 第一次輸入某人時請填寫，之後系統會自動記憶</div>
+            </div>
+            <div class="input-group">
+                <label>accid (b):</label>
+                <input type="text" id="accid" placeholder="請輸入 accid">
+            </div>
+            <div class="input-group">
+                <label>遊戲暱稱 (c):</label>
+                <input type="text" id="gamename" placeholder="請輸入遊戲暱稱">
+            </div>
+            <button onclick="submitData()">單筆提交</button>
 
-        <h3>統計結果</h3>
-        <table id="statsTable">
-            <thead>
-                <tr>
-                    <th>得獎暱稱 (a)</th>
-                    <th>accid (b)</th>
-                    <th>遊戲暱稱 (c)</th>
-                    <th>中獎次數</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- 資料會顯示在這裡 -->
-            </tbody>
-        </table>
+            <hr>
+
+            <div class="input-group">
+                <label>批量輸入 (格式: "暱稱 accid 遊戲名" 或 "accid 遊戲名"):</label>
+                <textarea id="bulkInput" placeholder="小明 12345 戰神小明 (建立資料)&#10;12345 戰神小明 (自動抓取小明)"></textarea>
+            </div>
+            <button onclick="submitBulkData()" style="background-color: #007bff;">批量提交</button>
+
+            <h3>統計結果</h3>
+            <table id="statsTable">
+                <thead>
+                    <tr>
+                        <th>得獎暱稱 (a)</th>
+                        <th>accid (b)</th>
+                        <th>遊戲暱稱 (c)</th>
+                        <th>中獎次數</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div id="registryPage" class="content">
+            <h3>已註冊的暱稱關聯表</h3>
+            <table id="registryTable">
+                <thead>
+                    <tr>
+                        <th>識別碼 (AccID_遊戲名)</th>
+                        <th>綁定暱稱 (a)</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div id="lookupPage" class="content">
+            <div class="input-group">
+                <label>輸入要查詢的暱稱 (a) 清單 (每行一個):</label>
+                <textarea id="lookupInput" placeholder="小明&#10;小華"></textarea>
+            </div>
+            <button onclick="submitNicknameLookup()" style="background-color: #17a2b8;">開始查詢</button>
+
+            <h3>查詢結果 (累計次數)</h3>
+            <table id="lookupTable">
+                <thead>
+                    <tr>
+                        <th>得獎暱稱 (a)</th>
+                        <th>總得獎次數</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
+        function switchTab(tabId, el) {
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            const target = document.getElementById(tabId);
+            if (target) target.classList.add('active');
+            if (el) el.classList.add('active');
+            if (tabId === 'registryPage') loadRegistry();
+        }
+
         async function loadStats() {
             const response = await fetch('/api/stats');
             const data = await response.json();
@@ -81,13 +134,29 @@
             }
         }
 
+        async function loadRegistry() {
+            const response = await fetch('/api/registry');
+            const data = await response.json();
+            const tbody = document.querySelector('#registryTable tbody');
+            tbody.innerHTML = '';
+            if (data) {
+                data.forEach(item => {
+                    const row = `<tr>
+                        <td>${item.key}</td>
+                        <td>${item.nickname}</td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            }
+        }
+
         async function submitData() {
             const a = document.getElementById('nickname').value;
             const b = document.getElementById('accid').value;
             const c = document.getElementById('gamename').value;
 
-            if (!a || !b || !c) {
-                alert('請填寫所有欄位');
+            if (!b || !c) {
+                alert('請填寫 accid 與 遊戲暱稱');
                 return;
             }
 
@@ -103,7 +172,8 @@
                 document.getElementById('gamename').value = '';
                 loadStats();
             } else {
-                alert('提交失敗');
+                const err = await response.text();
+                alert('提交失敗: ' + err);
             }
         }
 
@@ -119,6 +189,9 @@
                 const parts = line.trim().split(/\s+/); // 支援空格或 Tab 分隔
                 if (parts.length >= 3) {
                     return { a: parts[0], b: parts[1], c: parts[2] };
+                } else if (parts.length === 2) {
+                    // 自動查找模式
+                    return { a: "", b: parts[0], c: parts[1] };
                 }
                 return null;
             }).filter(r => r !== null);
@@ -137,6 +210,34 @@
             if (response.ok) {
                 document.getElementById('bulkInput').value = '';
                 loadStats();
+            }
+        }
+
+        async function submitNicknameLookup() {
+            const text = document.getElementById('lookupInput').value.trim();
+            if (!text) {
+                alert('請輸入要查詢的暱稱');
+                return;
+            }
+
+            const names = text.split('\n').map(n => n.trim()).filter(n => n !== "");
+            const response = await fetch('/api/lookup-nicknames', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(names)
+            });
+
+            if (response.ok) {
+                const results = await response.json();
+                const tbody = document.querySelector('#lookupTable tbody');
+                tbody.innerHTML = '';
+                for (const name in results) {
+                    const row = `<tr>
+                        <td>${name}</td>
+                        <td><strong>${results[name]}</strong></td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                }
             }
         }
 
