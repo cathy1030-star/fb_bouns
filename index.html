@@ -208,8 +208,13 @@
             });
 
             if (response.ok) {
+                const result = await response.text();
+                alert(result);
                 document.getElementById('bulkInput').value = '';
                 loadStats();
+            } else {
+                const err = await response.text();
+                alert(err);
             }
         }
 

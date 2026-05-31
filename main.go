@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"sync"
 )
 
@@ -34,6 +35,8 @@ var (
 )
 
 func main() {
+	loadData() // 啟動時讀取現有資料
+
 	http.HandleFunc("/", handleIndex)
 	http.HandleFunc("/add", handleAdd)
 	http.HandleFunc("/api/bulk-add", handleBulkAdd)
@@ -43,6 +46,47 @@ func main() {
 
 	fmt.Println("伺服器已啟動於 http://localhost:8080")
 	http.ListenAndServe(":8080", nil)
+}
+
+// 將資料儲存至 data.json
+func saveData() {
+	statsMu.RLock()
+	registryMu.RLock()
+	defer statsMu.RUnlock()
+	defer registryMu.RUnlock()
+
+	var data struct {
+		Stats    []StatsResult     `json:"stats"`
+		Registry map[string]string `json:"registry"`
+	}
+	for rec, count := range stats {
+		data.Stats = append(data.Stats, StatsResult{Record: rec, Count: count})
+	}
+	data.Registry = registry
+
+	b, _ := json.MarshalIndent(data, "", "  ")
+	_ = os.WriteFile("data.json", b, 0644)
+}
+
+// 從 data.json 讀取資料
+func loadData() {
+	b, err := os.ReadFile("data.json")
+	if err != nil {
+		return // 若檔案不存在則跳過
+	}
+
+	var data struct {
+		Stats    []StatsResult     `json:"stats"`
+		Registry map[string]string `json:"registry"`
+	}
+	if err := json.Unmarshal(b, &data); err != nil {
+		return
+	}
+
+	for _, s := range data.Stats {
+		stats[s.Record] = s.Count
+	}
+	registry = data.Registry
 }
 
 // 顯示首頁
@@ -80,7 +124,7 @@ func handleAdd(w http.ResponseWriter, r *http.Request) {
 			rec.Nickname = name
 		} else {
 			registryMu.Unlock()
-			http.Error(w, "資料庫找不到此暱稱，請手動輸入一次以建立紀錄", http.StatusNotFound)
+			http.Error(w, "此 ID 為新資料，請至少輸入一次『得獎暱稱』以供系統記憶。", http.StatusBadRequest)
 			return
 		}
 	}
@@ -91,6 +135,7 @@ func handleAdd(w http.ResponseWriter, r *http.Request) {
 	stats[rec]++
 	statsMu.Unlock()
 
+	saveData() // 儲存變更
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, "success")
 }
@@ -129,7 +174,8 @@ func handleBulkAdd(w http.ResponseWriter, r *http.Request) {
 
 			// 只有在暱稱存在的情況下才記錄統計
 			if rec.Nickname != "" {
-				stats[Record{Nickname: rec.Nickname, AccID: rec.AccID, GameName: rec.GameName}]++
+				key := Record{Nickname: rec.Nickname, AccID: rec.AccID, GameName: rec.GameName}
+				stats[key]++
 				addedCount++
 			}
 		}
@@ -137,11 +183,13 @@ func handleBulkAdd(w http.ResponseWriter, r *http.Request) {
 	statsMu.Unlock()
 	registryMu.Unlock()
 
+	saveData() // 儲存變更
 	if addedCount == 0 && len(recs) > 0 {
-		http.Error(w, "所有項目皆因缺少暱稱且資料庫無紀錄而跳過", http.StatusBadRequest)
+		http.Error(w, "提交失敗：貼上的名單皆為新 ID 且未包含暱稱，請在名單中至少包含一次『暱稱』欄位。", http.StatusBadRequest)
 		return
 	}
-	fmt.Fprintf(w, "成功記錄 %d 筆資料", addedCount)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "成功記錄 %d 筆資料！", addedCount)
 }
 
 // 取得目前的統計清單
