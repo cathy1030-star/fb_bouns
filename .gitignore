@@ -1,7 +1,0 @@
-# 編譯產生的執行檔
-*.exe
-*.exe~
-__debug_bin
-main
-eventlist
-*.log
