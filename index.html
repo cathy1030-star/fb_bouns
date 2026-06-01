@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中獎次數統計系統</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f5f7fa;
+            --border-color: #dcdfe6;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        
+        /* Tab Styles */
+        .tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; border: none; background: none; font-size: 16px; font-weight: bold; color: #666; }
+        .tab.active { color: var(--primary-color); border-bottom: 3px solid var(--primary-color); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Form Styles */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box; }
+        button { background-color: var(--primary-color); color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; transition: 0.3s; }
+        /* 唯讀欄位樣式 */
+        input[readonly] { background-color: #f0f0f0; color: #888; cursor: not-allowed; }
+        button:hover { background-color: #357abd; }
+
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid var(--border-color); padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; }
+        tr:nth-child(even) { background-color: #fafafa; }
+        
+        /* 壓灰樣式 */
+        .completed { opacity: 0.5; background-color: #ebebeb !important; color: #888; }
+
+        .clear-btn { background-color: #ff4d4f; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🏆 中獎管理系統</h2>
+    
+    <div class="tabs">
+        <button class="tab active" onclick="openTab(0)">紀錄備註</button>
+        <button class="tab" onclick="openTab(1)">中獎名單備份</button>
+        <button class="tab" onclick="openTab(2)">總計統計</button>
+        <button class="tab" onclick="openTab(3)">批量排名</button>
+    </div>
+
+    <!-- Tab 1: 紀錄/備註 (原 Tab 3) -->
+    <div id="tab2" class="tab-content active">
+        <h3>財務與備註紀錄</h3>
+        <div class="form-group">
+            <label>姓名 (Name)</label><input type="text" id="recName">
+        </div>
+        <div class="form-group">
+            <label>帳號 ID (AccID)</label><input type="text" id="recAccId" oninput="autoFillId()">
+        </div>
+        <div class="form-group">
+            <label>識別 ID (ID)</label><input type="text" id="recId">
+        </div>
+        <div class="form-group">
+            <label>日期</label><input type="date" id="recDate">
+        </div>
+        <div class="form-group">
+            <label>備註</label><input type="text" id="recRemark">
+        </div>
+        <div class="form-group">
+            <label>幣</label><input type="number" id="recAmount">
+        </div>
+        <button onclick="addRecord()">新增紀錄並計入統計</button>
+
+        <table>
+            <thead>
+                <tr><th>選取</th><th>姓名</th><th>AccID</th><th>ID</th><th>日期</th><th>備註</th><th>幣</th><th>操作</th></tr>
+            </thead>
+            <tbody id="recordTableBody"></tbody>
+        </table>
+    </div>
+
+    <!-- Tab 2: 輸入中獎資訊 -->
+    <div id="tab1" class="tab-content">
+        <h3>新增備份資料</h3>
+        <div class="form-group">
+            <label>姓名 (Name)</label><input type="text" id="inputName">
+        </div>
+        <div class="form-group">
+            <label>帳號 ID (AccID)</label><input type="text" id="inputAccId">
+        </div>
+        <div class="form-group">
+            <label>識別 ID (ID)</label><input type="text" id="inputId">
+        </div>
+        <button onclick="addEntry()">提交並增加次數</button>
+
+        <hr style="margin: 20px 0; border: 0; border-top: 1px solid var(--border-color);">
+        <h3>批量匯入備份資料</h3>
+        <p style="font-size: 0.85em; color: #666;">請從 Excel 或文字檔複製「姓名 AccID ID」格式並貼在下方：</p>
+        <textarea id="batchInput" rows="5" placeholder="範例：&#10;吳家靚	78891	用捨行藏在我&#10;蔡靖緹	14758	GRANDSLAM"></textarea>
+        <button onclick="batchImport()" style="background-color: #67c23a; margin-top: 10px;">批量匯入資料</button>
+
+        <h3>詳細備份清單</h3>
+        <table id="entryTable">
+            <thead>
+                <tr><th>選取</th><th>姓名</th><th>AccID</th><th>ID</th><th>時間</th><th>操作</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Tab 3: 顯示統計 (原 Tab 1) -->
+    <div id="tab0" class="tab-content">
+        <h3>姓名中獎次數統計</h3>
+        <table id="statsTable">
+            <thead>
+                <tr><th>姓名 (Name)</th><th>總中獎次數</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Tab 4: 批量排名 -->
+    <div id="tab3" class="tab-content">
+        <h3>批量查詢排名</h3>
+        <p>請輸入多個姓名（每行一個）：</p>
+        <textarea id="bulkNames" rows="10"></textarea>
+        <br><br>
+        <button onclick="calculateBulkRank()">查詢排名</button>
+
+        <table id="rankTable">
+            <thead>
+                <tr><th>排名</th><th>姓名</th><th>目前中獎次數</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // 資料結構初始化
+    let entries = JSON.parse(localStorage.getItem('winner_entries')) || [];
+    let records = JSON.parse(localStorage.getItem('winner_records')) || [];
+
+    function saveData() {
+        localStorage.setItem('winner_entries', JSON.stringify(entries));
+        localStorage.setItem('winner_records', JSON.stringify(records));
+        renderAll();
+    }
+
+    // 分頁切換
+    function openTab(index) {
+        document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === index));
+        document.querySelectorAll('.tab-content').forEach((c, i) => c.classList.toggle('active', i === index));
+        renderAll(); // 每次切換分頁時重新整理數據，確保紀錄與統計同步
+    }
+
+    // Tab 2: 新增資料
+    function addEntry() {
+        const name = document.getElementById('inputName').value.trim();
+        const accid = document.getElementById('inputAccId').value.trim();
+        const id = document.getElementById('inputId').value.trim();
+        
+        if (!name) return alert('請輸入姓名');
+
+        entries.push({
+            name,
+            accid,
+            id,
+            timestamp: new Date().toLocaleString(),
+            checked: false
+        });
+        
+        saveData();
+        document.getElementById('inputName').value = '';
+        document.getElementById('inputAccId').value = '';
+        document.getElementById('inputId').value = '';
+    }
+
+    // 批量匯入邏輯
+    function batchImport() {
+        const rawData = document.getElementById('batchInput').value.trim();
+        if (!rawData) return alert('請貼入資料');
+        
+        const lines = rawData.split('\n');
+        let count = 0;
+        
+        lines.forEach(line => {
+            if (!line.trim()) return;
+            
+            // 優先嘗試以 Tab 分隔（Excel 格式），若無則嘗試以多個空格分隔
+            let parts = line.split('\t');
+            if (parts.length < 2) {
+                parts = line.trim().split(/\s{2,}/);
+            }
+            // 最後手段：單個空格分隔
+            if (parts.length < 2) {
+                parts = line.trim().split(' ');
+            }
+
+            if (parts.length >= 2) {
+                entries.push({
+                    name: parts[0].trim(),
+                    accid: parts[1].trim(),
+                    id: (parts.slice(2).join(' ') || "").trim().replace(/^"|"$/g, ''),
+                    timestamp: new Date().toLocaleString(),
+                    checked: false
+                });
+                count++;
+            }
+        });
+        
+        saveData();
+        document.getElementById('batchInput').value = '';
+        alert(`成功匯入 ${count} 筆資料！`);
+    }
+
+    // Tab 3: 新增備註紀錄
+    function addRecord() {
+        const name = document.getElementById('recName').value.trim();
+        const accid = document.getElementById('recAccId').value.trim();
+        const id = document.getElementById('recId').value.trim();
+        const date = document.getElementById('recDate').value;
+        const remark = document.getElementById('recRemark').value;
+        const amount = document.getElementById('recAmount').value;
+
+        if (!name) return alert('請輸入姓名以計入統計');
+
+        // 同時增加到備註紀錄陣列 (records)
+        records.push({ name, accid, id, date, remark, amount, checked: false });
+        saveData();
+        
+        // 清空輸入欄位
+        document.getElementById('recName').value = '';
+        document.getElementById('recAccId').value = '';
+        document.getElementById('recId').value = '';
+        document.getElementById('recId').readOnly = false; // 重設 ID 為可編輯
+        document.getElementById('recRemark').value = '';
+        document.getElementById('recAmount').value = '';
+    }
+
+    // 自動帶出 ID (根據 AccID 搜尋之前的紀錄)
+    function autoFillId() {
+        const accid = document.getElementById('recAccId').value.trim();
+        const nameInput = document.getElementById('recName');
+        const idInput = document.getElementById('recId');
+
+        if (!accid) {
+            idInput.readOnly = false;
+            return;
+        }
+        // 從現有中獎紀錄中找尋最近一次出現該 AccID 的對應 ID
+        const match = [...entries].reverse().find(e => e.accid === accid);
+        if (match) {
+            nameInput.value = match.name;
+            idInput.value = match.id || '';
+            idInput.readOnly = true; // 找到對應資料，ID 設定為不可修改
+        } else {
+            idInput.readOnly = false; // 沒找到則維持可手動輸入
+        }
+    }
+
+    // 單筆刪除中獎紀錄
+    function deleteEntry(index) {
+        if(confirm('確定要刪除此筆中獎紀錄嗎？(這會影響統計次數)')) {
+            entries.splice(index, 1);
+            saveData();
+        }
+    }
+
+    // 單筆刪除備註紀錄
+    function deleteRecord(index) {
+        if(confirm('確定要刪除此筆備註紀錄嗎？')) {
+            records.splice(index, 1);
+            saveData();
+        }
+    }
+
+    // 切換中獎紀錄勾選狀態
+    function toggleEntryCheck(index) {
+        entries[index].checked = !entries[index].checked;
+        saveData();
+    }
+
+    // 切換備註紀錄勾選狀態
+    function toggleRecordCheck(index) {
+        records[index].checked = !records[index].checked;
+        saveData();
+    }
+
+    // Tab 4: 批量排名
+    function calculateBulkRank() {
+        const rawNames = document.getElementById('bulkNames').value.split('\n');
+        const searchNames = [...new Set(rawNames.map(n => n.trim()).filter(n => n !== ""))];
+        const stats = getStats();
+        const ranked = searchNames.map(name => ({
+            name,
+            count: stats[name] || 0
+        })).sort((a, b) => b.count - a.count);
+
+        const tbody = document.querySelector('#rankTable tbody');
+        tbody.innerHTML = '';
+        ranked.forEach((item, index) => {
+            tbody.innerHTML += `<tr><td>${index + 1}</td><td>${item.name}</td><td>${item.count}</td></tr>`;
+        });
+    }
+
+    function getStats() {
+        // 合併備份清單與備註紀錄進行統計
+        const allData = [...entries, ...records];
+        return allData.reduce((acc, curr) => {
+            acc[curr.name] = (acc[curr.name] || 0) + 1;
+            return acc;
+        }, {});
+    }
+
+    function renderAll() {
+        const stats = getStats();
+        const statsTbody = document.querySelector('#statsTable tbody');
+        statsTbody.innerHTML = '';
+        Object.keys(stats).sort((a,b) => stats[b] - stats[a]).forEach(name => {
+            statsTbody.innerHTML += `<tr><td>${name}</td><td>${stats[name]}</td></tr>`;
+        });
+
+        const entryTbody = document.querySelector('#entryTable tbody');
+        entryTbody.innerHTML = '';
+        for (let i = entries.length - 1; i >= 0; i--) {
+            const e = entries[i];
+            const isChecked = e.checked ? 'checked' : '';
+            const rowClass = e.checked ? 'class="completed"' : '';
+            entryTbody.innerHTML += `<tr ${rowClass}><td><input type="checkbox" ${isChecked} onchange="toggleEntryCheck(${i})"></td><td>${e.name}</td><td>${e.accid}</td><td>${e.id}</td><td>${e.timestamp}</td><td><button onclick="deleteEntry(${i})" style="background-color: #ff4d4f; padding: 5px 8px; font-size: 12px;">刪除</button></td></tr>`;
+        }
+
+        const recordTbody = document.getElementById('recordTableBody');
+        recordTbody.innerHTML = '';
+        for (let i = records.length - 1; i >= 0; i--) {
+            const r = records[i];
+            const isChecked = r.checked ? 'checked' : '';
+            const rowClass = r.checked ? 'class="completed"' : '';
+            recordTbody.innerHTML += `<tr ${rowClass}>
+                <td><input type="checkbox" ${isChecked} onchange="toggleRecordCheck(${i})"></td>
+                <td>${r.name || ''}</td><td>${r.accid || ''}</td><td>${r.id || ''}</td><td>${r.date || ''}</td><td>${r.remark || ''}</td><td>${r.amount || ''}</td>
+                <td><button onclick="deleteRecord(${i})" style="background-color: #ff4d4f; padding: 5px 8px; font-size: 12px;">刪除</button></td>
+            </tr>`;
+        }
+    }
+
+    function clearAllData() {
+        if(confirm('確定要刪除所有紀錄嗎？')) {
+            localStorage.clear();
+            entries = [];
+            records = [];
+            renderAll();
+        }
+    }
+    renderAll();
+</script>
+</body>
+</html>
